@@ -1,0 +1,20 @@
+{
+  "resources": [
+    {
+      "filename": "examples/manifests/deployment.yaml",
+      "kind": "Deployment",
+      "name": "web",
+      "version": "apps/v1",
+      "status": "statusValid",
+      "msg": ""
+    },
+    {
+      "filename": "examples/manifests/service.yaml",
+      "kind": "Service",
+      "name": "web",
+      "version": "v1",
+      "status": "statusValid",
+      "msg": ""
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+# Example consumer workflow — copy to .github/workflows/validate.yml in your repo.
+name: validate-manifests
+
+on:
+  pull_request:
+    paths:
+      - "manifests/**"
+      - "k8s/**"
+
+permissions:
+  contents: read
+
+jobs:
+  kubeconform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Kubernetes manifests
+        uses: moveeeax/kubeconform-ci@v1
+        with:
+          dirs: manifests/
+          kubernetes-version: "1.30"
+          # Add CRD schemas so custom resources resolve:
+          schema-locations: |
+            https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+          ignore-paths: |
+            manifests/generated/

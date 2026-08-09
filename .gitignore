@@ -1,0 +1,16 @@
+# Local tool installs (anchored to repo root so no source path is caught)
+/.kubeconform-ci/
+/bin/
+/kubeconform
+/kustomize
+/yq
+*.tar.gz
+*.tgz
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Never ignore test fixtures
+!tests/fixtures/**
+!examples/**

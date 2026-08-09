@@ -1,0 +1,36 @@
+{
+  "resources": [
+    {
+      "filename": "examples/manifests/deployment.yaml",
+      "kind": "Deployment",
+      "name": "web",
+      "version": "apps/v1",
+      "status": "statusValid",
+      "msg": ""
+    },
+    {
+      "filename": "examples/manifests/bad-deployment.yaml",
+      "kind": "Deployment",
+      "name": "broken",
+      "version": "apps/v1",
+      "status": "statusInvalid",
+      "msg": "problem validating schema. Check JSON formatting: jsonschema: /spec/replicas: expected integer, but got string"
+    },
+    {
+      "filename": "examples/manifests/unknown.yaml",
+      "kind": "Widget",
+      "name": "gadget",
+      "version": "example.com/v1",
+      "status": "statusError",
+      "msg": "could not find schema for Widget"
+    },
+    {
+      "filename": "examples/manifests/skipped.yaml",
+      "kind": "CustomThing",
+      "name": "x",
+      "version": "example.com/v1",
+      "status": "statusSkipped",
+      "msg": ""
+    }
+  ]
+}

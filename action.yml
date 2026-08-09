@@ -1,0 +1,75 @@
+name: 'kubeconform-ci'
+description: 'Validate Kubernetes manifests (incl. CRDs, Helm & Kustomize output) with kubeconform and annotate the PR.'
+author: 'Michael Tarassov'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  dirs:
+    description: 'Directories or files to validate (space / newline / comma separated).'
+    required: false
+    default: '.'
+  kubernetes-version:
+    description: "Target Kubernetes version, e.g. '1.30'. Use 'master' or 'auto' for the latest schemas."
+    required: false
+    default: 'master'
+  ignore-paths:
+    description: 'Path substrings to skip (space / newline / comma separated).'
+    required: false
+    default: ''
+  schema-locations:
+    description: 'Extra schema locations for CRDs (one per line/comma). Adding any keeps the built-in default too.'
+    required: false
+    default: ''
+  strict:
+    description: 'Disallow unknown and duplicate fields (kubeconform -strict).'
+    required: false
+    default: 'true'
+  summary:
+    description: 'Write a Markdown results table to the GitHub job summary.'
+    required: false
+    default: 'true'
+  kustomize:
+    description: "Render dirs containing kustomization.yaml before validating: 'auto', 'true' or 'false'."
+    required: false
+    default: 'auto'
+  helm-charts:
+    description: 'Chart directories to render with `helm template` before validating (one per line).'
+    required: false
+    default: ''
+  kubeconform-version:
+    description: 'kubeconform release to install.'
+    required: false
+    default: '0.6.7'
+  extra-args:
+    description: 'Extra raw arguments forwarded to kubeconform.'
+    required: false
+    default: ''
+
+outputs:
+  invalid-count:
+    description: 'Number of manifests that failed validation.'
+    value: ${{ steps.run.outputs.invalid-count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: install
+      shell: bash
+      run: '${{ github.action_path }}/scripts/install.sh'
+      env:
+        KUBECONFORM_VERSION: ${{ inputs.kubeconform-version }}
+    - id: run
+      shell: bash
+      run: '${{ github.action_path }}/scripts/kubeconform-ci.sh'
+      env:
+        INPUT_DIRS: ${{ inputs.dirs }}
+        INPUT_KUBERNETES_VERSION: ${{ inputs.kubernetes-version }}
+        INPUT_IGNORE_PATHS: ${{ inputs.ignore-paths }}
+        INPUT_SCHEMA_LOCATIONS: ${{ inputs.schema-locations }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_KUSTOMIZE: ${{ inputs.kustomize }}
+        INPUT_HELM_CHARTS: ${{ inputs.helm-charts }}
+        INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
