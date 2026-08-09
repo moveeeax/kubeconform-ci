@@ -18,8 +18,8 @@ jobs:
       - name: Install shellcheck
         run: |
           set -eux
-          apt-get update
-          apt-get install -y --no-install-recommends shellcheck
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
       - name: Shellcheck
         run: shellcheck scripts/*.sh tests/integration.sh
 
@@ -30,8 +30,8 @@ jobs:
       - name: Install bats + jq
         run: |
           set -eux
-          apt-get update
-          apt-get install -y --no-install-recommends bats jq
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bats jq
       - name: Run unit tests
         run: bats tests/
 
@@ -45,16 +45,16 @@ jobs:
       - name: Install jq + tools
         run: |
           set -eux
-          apt-get update
-          apt-get install -y --no-install-recommends jq curl ca-certificates tar
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq curl ca-certificates tar
       - name: Install kubeconform + kustomize
         run: |
           set -eux
           arch="$(uname -m)"; case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
           curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-${arch}.tar.gz" \
-            | tar -xz -C /usr/local/bin kubeconform
+            | sudo tar -xz -C /usr/local/bin kubeconform
           curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_${arch}.tar.gz" \
-            | tar -xz -C /usr/local/bin kustomize
+            | sudo tar -xz -C /usr/local/bin kustomize
           kubeconform -v && kustomize version
       - name: Run integration suite
         run: bash tests/integration.sh
@@ -66,8 +66,8 @@ jobs:
       - name: Install curl + jq for the composite action
         run: |
           set -eux
-          apt-get update
-          apt-get install -y --no-install-recommends jq curl ca-certificates tar
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq curl ca-certificates tar
       - name: Validate the example manifests via this action
         uses: ./
         with:
