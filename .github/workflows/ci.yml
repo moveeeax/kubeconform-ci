@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: kubeconform-ci
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install shellcheck
@@ -24,7 +24,7 @@ jobs:
         run: shellcheck scripts/*.sh tests/integration.sh
 
   unit:
-    runs-on: kubeconform-ci
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install bats + jq
@@ -36,7 +36,7 @@ jobs:
         run: bats tests/
 
   integration:
-    runs-on: kubeconform-ci
+    runs-on: ubuntu-latest
     env:
       KUBECONFORM_VERSION: "0.6.7"
       KUSTOMIZE_VERSION: "5.4.3"
@@ -60,7 +60,7 @@ jobs:
         run: bash tests/integration.sh
 
   action-selftest:
-    runs-on: kubeconform-ci
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install curl + jq for the composite action
