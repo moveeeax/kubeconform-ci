@@ -39,9 +39,9 @@ inputs:
     required: false
     default: ''
   kubeconform-version:
-    description: 'kubeconform release to install.'
+    description: 'kubeconform release to install. Always installed and put first on PATH, even if another kubeconform is already present.'
     required: false
-    default: '0.6.7'
+    default: '0.8.0'
   extra-args:
     description: 'Extra raw arguments forwarded to kubeconform.'
     required: false

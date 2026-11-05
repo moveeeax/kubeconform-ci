@@ -14,7 +14,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Install shellcheck
         run: |
           set -eux
@@ -26,7 +26,7 @@ jobs:
   unit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Install bats + jq
         run: |
           set -eux
@@ -38,10 +38,10 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     env:
-      KUBECONFORM_VERSION: "0.6.7"
-      KUSTOMIZE_VERSION: "5.4.3"
+      KUBECONFORM_VERSION: "0.8.0"
+      KUSTOMIZE_VERSION: "5.8.3"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Install jq + tools
         run: |
           set -eux
@@ -62,7 +62,7 @@ jobs:
   action-selftest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Install curl + jq for the composite action
         run: |
           set -eux
@@ -80,3 +80,27 @@ jobs:
             examples/manifests
             examples/kustomize
           kubernetes-version: '1.30'
+
+  action-version-pin:
+    # kubeconform-version must win over a kubeconform that is already on PATH.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Put a different kubeconform on PATH
+        run: |
+          set -eux
+          arch="$(uname -m)"; case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-${arch}.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+          test "$(kubeconform -v)" = "v0.8.0"
+      - name: Run the action with an explicit kubeconform-version
+        uses: ./
+        with:
+          dirs: examples/manifests
+          kubernetes-version: '1.30'
+          kubeconform-version: '0.7.0'
+      - name: Check the requested version is the one on PATH
+        run: |
+          set -eux
+          command -v kubeconform
+          test "$(kubeconform -v)" = "v0.7.0"

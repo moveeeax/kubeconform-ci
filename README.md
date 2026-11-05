@@ -21,7 +21,7 @@ is that wiring, so a PR check is a single `uses:` block.
 ## Usage
 
 ```yaml
-- uses: moveeeax/kubeconform-ci@v1
+- uses: moveeeax/kubeconform-ci@v0
   with:
     kubernetes-version: "1.30"
     dirs: manifests/
@@ -48,7 +48,7 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
 | `summary` | `true` | Write a Markdown results table to the job summary. |
 | `kustomize` | `auto` | Render dirs containing `kustomization.yaml` before validating (`auto`/`true`/`false`). |
 | `helm-charts` | `` | Chart directories to render with `helm template` (one per line). |
-| `kubeconform-version` | `0.6.7` | kubeconform release to install. |
+| `kubeconform-version` | `0.8.0` | kubeconform release to install. Always installed and put first on `PATH`, even if another `kubeconform` is already present. |
 | `extra-args` | `` | Extra raw arguments forwarded to kubeconform. |
 
 ## Outputs
@@ -59,11 +59,15 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
 
 ## How it works
 
-1. `scripts/install.sh` fetches the `kubeconform` binary (and `yq` when missing) onto `PATH`.
+1. `scripts/install.sh` fetches the requested `kubeconform` release (and `yq` when missing),
+   verifies each download against the sha256 checksum file published with the upstream release,
+   and puts them first on `PATH`.
 2. `scripts/kubeconform-ci.sh` collects `*.yaml`/`*.yml` under `dirs`, honoring `ignore-paths`.
 3. Any directory with a `kustomization.yaml` is rendered with `kustomize build`; charts listed in
    `helm-charts` are rendered with `helm template`. Rendered output is validated instead of the
-   raw partials, so overlays are checked as they actually deploy.
+   raw partials, so overlays are checked as they actually deploy. The action does not install
+   `kustomize` or `helm`: they must already be on the runner's `PATH`, otherwise that rendering
+   step is skipped.
 4. `kubeconform -output json` results from every source are merged, converted to GitHub
    `::error` annotations (`file:line` located by resource name), and summarized. Any invalid or
    errored resource fails the step.

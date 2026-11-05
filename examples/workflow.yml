@@ -14,10 +14,10 @@ jobs:
   kubeconform:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: Validate Kubernetes manifests
-        uses: moveeeax/kubeconform-ci@v1
+        uses: moveeeax/kubeconform-ci@v0
         with:
           dirs: manifests/
           kubernetes-version: "1.30"
