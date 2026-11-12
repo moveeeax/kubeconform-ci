@@ -31,17 +31,25 @@ inputs:
     required: false
     default: 'true'
   kustomize:
-    description: "Render dirs containing kustomization.yaml before validating: 'auto', 'true' or 'false'."
+    description: "Render dirs containing kustomization.yaml before validating: 'auto', 'true' or 'false'. 'true' fails the step when kustomize is not on PATH; 'auto' only warns."
     required: false
     default: 'auto'
   helm-charts:
-    description: 'Chart directories to render with `helm template` before validating (one per line).'
+    description: 'Chart directories to render with `helm template` before validating (one per line). Fails the step when helm is not on PATH.'
     required: false
     default: ''
   kubeconform-version:
     description: 'kubeconform release to install. Always installed and put first on PATH, even if another kubeconform is already present.'
     required: false
     default: '0.8.0'
+  kustomize-version:
+    description: "kustomize release to install, e.g. '5.8.3'. Empty means do not install and use the kustomize already on PATH, if any."
+    required: false
+    default: ''
+  helm-version:
+    description: "Helm release to install, e.g. '3.22.1'. Empty means do not install and use the helm already on PATH, if any."
+    required: false
+    default: ''
   extra-args:
     description: 'Extra raw arguments forwarded to kubeconform.'
     required: false
@@ -60,6 +68,8 @@ runs:
       run: '${{ github.action_path }}/scripts/install.sh'
       env:
         KUBECONFORM_VERSION: ${{ inputs.kubeconform-version }}
+        KUSTOMIZE_VERSION: ${{ inputs.kustomize-version }}
+        HELM_VERSION: ${{ inputs.helm-version }}
     - id: run
       shell: bash
       run: '${{ github.action_path }}/scripts/kubeconform-ci.sh'

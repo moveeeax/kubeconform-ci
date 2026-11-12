@@ -149,3 +149,74 @@ YAML
   [ "$status" -eq 0 ]
   [ "$output" -eq 2 ]
 }
+
+# kc_check_renderers looks tools up on PATH, so each test runs it with PATH set
+# to a temp dir that holds only the stub tools that test wants present, plus
+# links to the coreutils the function itself calls.
+_renderer_path() {  # _renderer_path TOOL... -> dir with executable stubs
+  local dir tool; dir="$(mktemp -d)"
+  for tool in tr sed find head; do
+    ln -s "$(command -v "$tool")" "${dir}/${tool}"
+  done
+  for tool in "$@"; do
+    printf '#!/bin/sh\nexit 0\n' > "${dir}/${tool}"
+    chmod +x "${dir}/${tool}"
+  done
+  printf '%s\n' "$dir"
+}
+
+@test "kc_check_renderers fails when kustomize is true and kustomize is missing" {
+  bin="$(_renderer_path)"
+  PATH="$bin" run kc_check_renderers "true" "" "."
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error title=kubeconform-ci::kustomize is true"* ]]
+}
+
+@test "kc_check_renderers passes when kustomize is true and kustomize is present" {
+  bin="$(_renderer_path kustomize)"
+  PATH="$bin" run kc_check_renderers "true" "" "."
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "kc_check_renderers only warns in auto mode next to a kustomization file" {
+  tmp="$(mktemp -d)"
+  mkdir -p "${tmp}/overlay"
+  : > "${tmp}/overlay/kustomization.yaml"
+  bin="$(_renderer_path)"
+  PATH="$bin" run kc_check_renderers "auto" "" "$tmp"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::warning title=kubeconform-ci::kustomization file found"* ]]
+}
+
+@test "kc_check_renderers is silent in auto mode without kustomization files" {
+  tmp="$(mktemp -d)"
+  : > "${tmp}/plain.yaml"
+  bin="$(_renderer_path)"
+  PATH="$bin" run kc_check_renderers "auto" "" "$tmp"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "kc_check_renderers ignores a missing kustomize when kustomize is false" {
+  tmp="$(mktemp -d)"
+  : > "${tmp}/kustomization.yaml"
+  bin="$(_renderer_path)"
+  PATH="$bin" run kc_check_renderers "false" "" "$tmp"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "kc_check_renderers fails when helm-charts is set and helm is missing" {
+  bin="$(_renderer_path kustomize)"
+  PATH="$bin" run kc_check_renderers "auto" "charts/web" "."
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error title=kubeconform-ci::helm-charts is set"* ]]
+}
+
+@test "kc_check_renderers passes when helm-charts is set and helm is present" {
+  bin="$(_renderer_path helm)"
+  PATH="$bin" run kc_check_renderers "false" "charts/web" "."
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
