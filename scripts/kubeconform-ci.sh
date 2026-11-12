@@ -61,6 +61,34 @@ run_stream() {  # $1=label; stdin=rendered YAML; prints JSON with filename=label
   rm -f "$err"
 }
 
+# render_target LABEL KIND NAME CMD... -> one kubeconform JSON doc.
+# Runs the render command into a temp file. On success the rendered YAML is
+# validated under LABEL. On a non-zero exit the output is dropped, even if
+# partial, and a statusError entry carrying the command's stderr is returned
+# instead, so the failure is annotated, counted and fails the step.
+render_target() {
+  local label="$1" kind="$2" name="$3"; shift 3
+  local out err rc msg
+  out="$(mktemp)"; err="$(mktemp)"
+  set +e
+  "$@" >"$out" 2>"$err"
+  rc=$?
+  set -e
+  # Keep the tool's stderr in the step log (warnings included).
+  cat "$err" >&2
+  if [ "$rc" -eq 0 ]; then
+    run_stream "$label" < "$out"
+  else
+    echo "kubeconform-ci: '$*' failed (exit ${rc})" >&2
+    msg="$(head -c 2000 "$err")"
+    [ -z "$msg" ] && msg="no stderr output"
+    jq -n --arg f "$label" --arg k "$kind" --arg n "$name" \
+      --arg m "${*} failed (exit ${rc}): ${msg}" \
+      '{resources:[{filename:$f,kind:$k,name:$n,status:"statusError",msg:$m}]}'
+  fi
+  rm -f "$out" "$err"
+}
+
 main() {
   # Requested rendering with a missing tool must fail, not validate raw partials.
   kc_check_renderers "${INPUT_KUSTOMIZE:-auto}" "${INPUT_HELM_CHARTS:-}" "${INPUT_DIRS:-.}" || return 1
@@ -75,7 +103,7 @@ main() {
   # so it is always excluded (it is rendered separately when kustomize exists).
   local files ignore="${INPUT_IGNORE_PATHS:-}"
   ignore+=$'\n'"kustomization.yaml"$'\n'"kustomization.yml"
-  local kd
+  local kd kfile
   for kd in "${kdirs[@]}"; do
     [ -n "$kd" ] && ignore+=$'\n'"${kd}/"
   done
@@ -93,18 +121,19 @@ main() {
   for kd in "${kdirs[@]}"; do
     [ -z "$kd" ] && continue
     echo "kubeconform-ci: rendering kustomize ${kd}"
-    if kustomize build "$kd" 2>/dev/null | run_stream "${kd}/kustomization.yaml" >> "$docs"; then
-      n_targets=$((n_targets + 1))
-    fi
+    kfile="${kd}/kustomization.yaml"
+    [ ! -f "$kfile" ] && [ -f "${kd}/kustomization.yml" ] && kfile="${kd}/kustomization.yml"
+    render_target "$kfile" "Kustomization" "$kd" kustomize build "$kd" >> "$docs"
+    n_targets=$((n_targets + 1))
   done
 
   local chart
   while IFS= read -r chart || [ -n "$chart" ]; do
     [ -z "$chart" ] && continue
     echo "kubeconform-ci: rendering helm chart ${chart}"
-    if helm template "$(basename "$chart")" "$chart" 2>/dev/null | run_stream "${chart}/Chart.yaml" >> "$docs"; then
-      n_targets=$((n_targets + 1))
-    fi
+    render_target "${chart%/}/Chart.yaml" "HelmChart" "$chart" \
+      helm template "$(basename "$chart")" "$chart" >> "$docs"
+    n_targets=$((n_targets + 1))
   done < <(kc_split_list "${INPUT_HELM_CHARTS:-}")
 
   if [ "$n_targets" -eq 0 ]; then
