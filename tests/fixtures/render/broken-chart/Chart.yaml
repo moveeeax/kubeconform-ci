@@ -1,0 +1,5 @@
+# Deliberately broken chart: its template calls an undefined function, so
+# `helm template` exits non-zero. Used by tests/integration.sh.
+apiVersion: v2
+name: broken-chart
+version: 0.1.0

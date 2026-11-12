@@ -69,7 +69,7 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
 
 | Output | Description |
 | --- | --- |
-| `invalid-count` | Number of manifests that failed validation. |
+| `invalid-count` | Number of manifests that failed validation. A Kustomize dir or Helm chart that failed to render counts as one. |
 
 ## How it works
 
@@ -83,7 +83,15 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
    raw partials, so overlays are checked as they actually deploy. If rendering was requested
    (`kustomize: true` or a non-empty `helm-charts`) and the tool is not on `PATH`, the step fails
    before validating anything. With `kustomize: auto` a missing `kustomize` only produces a
-   warning annotation.
+   warning annotation. The tools' stderr goes to the step log. If `kustomize build` or
+   `helm template` exits non-zero, its output is discarded (a partial render is never
+   validated) and the step fails with an `::error` on that `kustomization.yaml` / `Chart.yaml`
+   naming the directory or chart and quoting the tool's stderr:
+
+   ```
+   ::error file=charts/web/Chart.yaml,line=1,title=kubeconform: HelmChart/charts/web::
+     helm template web charts/web failed (exit 1): Error: parse error at (web/templates/cm.yaml:4): ...
+   ```
 4. `kubeconform -output json` results from every source are merged, converted to GitHub
    `::error` annotations (`file:line` located by resource name), and summarized. Any invalid or
    errored resource fails the step.

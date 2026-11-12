@@ -1,0 +1,6 @@
+# Deliberately broken: the listed resource does not exist, so
+# `kustomize build` exits non-zero. Used by tests/integration.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - missing-deployment.yaml

@@ -57,7 +57,7 @@ inputs:
 
 outputs:
   invalid-count:
-    description: 'Number of manifests that failed validation.'
+    description: 'Number of manifests that failed validation, counting each Kustomize dir or Helm chart that failed to render as one.'
     value: ${{ steps.run.outputs.invalid-count }}
 
 runs:

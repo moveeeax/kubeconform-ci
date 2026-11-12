@@ -220,3 +220,87 @@ _renderer_path() {  # _renderer_path TOOL... -> dir with executable stubs
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# Render failures: scripts/kubeconform-ci.sh runs with stub kustomize, helm and
+# kubeconform first on PATH. The kubeconform stub logs what it was asked to
+# validate, so the tests can check that partial render output never reaches it.
+# Each test keeps all temp files under one mktemp dir that teardown removes.
+teardown() {
+  if [ -n "${KC_TMP:-}" ]; then
+    rm -rf "$KC_TMP"
+    unset KC_TMP
+  fi
+}
+
+_render_stubs() {  # creates $KC_TMP with bin/ stubs; RENDER_RC is the render exit code
+  KC_TMP="$(mktemp -d)"
+  mkdir -p "${KC_TMP}/bin"
+  local tool
+  for tool in kustomize helm; do
+    cat > "${KC_TMP}/bin/${tool}" <<STUB
+#!/bin/sh
+printf 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: partial-${tool}\n'
+echo "Error: ${tool} stub exploded" >&2
+exit ${RENDER_RC:-1}
+STUB
+  done
+  cat > "${KC_TMP}/bin/kubeconform" <<STUB
+#!/bin/sh
+echo "args: \$*" >> "${KC_TMP}/kubeconform.log"
+for a in "\$@"; do
+  [ "\$a" = "-" ] && cat >> "${KC_TMP}/kubeconform.log"
+done
+printf '{"resources":[]}\n'
+STUB
+  chmod +x "${KC_TMP}/bin/"*
+  : > "${KC_TMP}/kubeconform.log"
+  : > "${KC_TMP}/output"
+}
+
+@test "kubeconform-ci fails and annotates when kustomize build fails" {
+  _render_stubs
+  mkdir -p "${KC_TMP}/overlay"
+  : > "${KC_TMP}/overlay/kustomization.yaml"
+  PATH="${KC_TMP}/bin:${PATH}" GITHUB_OUTPUT="${KC_TMP}/output" INPUT_DIRS="${KC_TMP}/overlay" \
+    run bash "${ROOT}/scripts/kubeconform-ci.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error file=${KC_TMP}/overlay/kustomization.yaml"* ]]
+  [[ "$output" == *"kustomize build ${KC_TMP}/overlay failed (exit 1)"* ]]
+  [[ "$output" == *"Error: kustomize stub exploded"* ]]
+  [[ "$output" != *"all manifests valid"* ]]
+  grep -q 'invalid-count=1' "${KC_TMP}/output"
+  # The partial output of the failed build must not be validated.
+  run grep -q 'partial-kustomize' "${KC_TMP}/kubeconform.log"
+  [ "$status" -ne 0 ]
+}
+
+@test "kubeconform-ci fails and annotates when helm template fails" {
+  _render_stubs
+  mkdir -p "${KC_TMP}/manifests" "${KC_TMP}/chart"
+  : > "${KC_TMP}/manifests/plain.yaml"
+  PATH="${KC_TMP}/bin:${PATH}" GITHUB_OUTPUT="${KC_TMP}/output" \
+    INPUT_DIRS="${KC_TMP}/manifests" INPUT_HELM_CHARTS="${KC_TMP}/chart" \
+    run bash "${ROOT}/scripts/kubeconform-ci.sh"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error file=${KC_TMP}/chart/Chart.yaml"* ]]
+  [[ "$output" == *"helm template chart ${KC_TMP}/chart failed (exit 1)"* ]]
+  [[ "$output" == *"Error: helm stub exploded"* ]]
+  grep -q 'invalid-count=1' "${KC_TMP}/output"
+  # Plain manifests are still validated; the partial chart output is not.
+  grep -q 'plain.yaml' "${KC_TMP}/kubeconform.log"
+  run grep -q 'partial-helm' "${KC_TMP}/kubeconform.log"
+  [ "$status" -ne 0 ]
+}
+
+@test "kubeconform-ci validates rendered output when the render succeeds" {
+  RENDER_RC=0 _render_stubs
+  mkdir -p "${KC_TMP}/overlay" "${KC_TMP}/chart"
+  : > "${KC_TMP}/overlay/kustomization.yaml"
+  PATH="${KC_TMP}/bin:${PATH}" GITHUB_OUTPUT="${KC_TMP}/output" \
+    INPUT_DIRS="${KC_TMP}/overlay" INPUT_HELM_CHARTS="${KC_TMP}/chart" \
+    run bash "${ROOT}/scripts/kubeconform-ci.sh"
+  [ "$status" -eq 0 ]
+  grep -q 'invalid-count=0' "${KC_TMP}/output"
+  grep -q 'partial-kustomize' "${KC_TMP}/kubeconform.log"
+  grep -q 'partial-helm' "${KC_TMP}/kubeconform.log"
+}
