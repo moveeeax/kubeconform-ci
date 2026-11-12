@@ -46,6 +46,40 @@ kc_collect_files() {
   } | LC_ALL=C sort -u | _kc_filter_ignore "$ignore_lines"
 }
 
+# _kc_has_kustomization DIRS -> 0 when any entry is or contains a kustomization file.
+_kc_has_kustomization() {
+  local d
+  while IFS= read -r d || [ -n "$d" ]; do
+    [ -d "$d" ] || continue
+    if [ -n "$(find "$d" -type f \( -name kustomization.yaml -o -name kustomization.yml \) 2>/dev/null | head -n1)" ]; then
+      return 0
+    fi
+  done < <(kc_split_list "${1:-}")
+  return 1
+}
+
+# kc_check_renderers KUSTOMIZE_MODE HELM_CHARTS DIRS
+# Fails (returns 1, prints ::error lines) when rendering was requested but the
+# tool is not on PATH: kustomize mode 'true' without kustomize, or a non-empty
+# HELM_CHARTS without helm. In 'auto' mode a missing kustomize next to a
+# kustomization file only prints a ::warning, since auto means best effort.
+kc_check_renderers() {
+  local mode="${1:-auto}" charts="${2:-}" dirs="${3:-.}" rc=0
+  if ! command -v kustomize >/dev/null 2>&1; then
+    if [ "$mode" = "true" ]; then
+      echo "::error title=kubeconform-ci::kustomize is true but kustomize is not on PATH; set kustomize-version or install it before this step"
+      rc=1
+    elif [ "$mode" = "auto" ] && _kc_has_kustomization "$dirs"; then
+      echo "::warning title=kubeconform-ci::kustomization file found but kustomize is not on PATH, overlays are not rendered; set kustomize-version to render them"
+    fi
+  fi
+  if [ -n "$(kc_split_list "$charts")" ] && ! command -v helm >/dev/null 2>&1; then
+    echo "::error title=kubeconform-ci::helm-charts is set but helm is not on PATH; set helm-version or install it before this step"
+    rc=1
+  fi
+  return "$rc"
+}
+
 # kc_kubeconform_args -> kubeconform CLI args, one per line, from INPUT_* env.
 # Reads INPUT_STRICT, INPUT_KUBERNETES_VERSION, INPUT_SCHEMA_LOCATIONS, INPUT_EXTRA_ARGS.
 kc_kubeconform_args() {

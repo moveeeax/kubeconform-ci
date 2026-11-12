@@ -34,6 +34,18 @@ A failing manifest annotates the PR at the offending file and blocks the check:
   '/spec/replicas' expected integer or null, but got string
 ```
 
+To render Kustomize overlays and Helm charts on a runner that may not have the tools, pin them:
+
+```yaml
+- uses: moveeeax/kubeconform-ci@v0
+  with:
+    dirs: k8s/
+    kustomize: "true"
+    kustomize-version: "5.8.3"
+    helm-charts: charts/web
+    helm-version: "3.22.1"
+```
+
 See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request workflow.
 
 ## Inputs
@@ -46,9 +58,11 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
 | `schema-locations` | `` | Extra schema locations for CRDs (one per line). Adding any keeps the built-in `default` too. |
 | `strict` | `true` | Disallow unknown / duplicate fields. |
 | `summary` | `true` | Write a Markdown results table to the job summary. |
-| `kustomize` | `auto` | Render dirs containing `kustomization.yaml` before validating (`auto`/`true`/`false`). |
-| `helm-charts` | `` | Chart directories to render with `helm template` (one per line). |
+| `kustomize` | `auto` | Render dirs containing `kustomization.yaml` before validating (`auto`/`true`/`false`). `true` fails the step when `kustomize` is not on `PATH`; `auto` prints a warning and validates without rendering. |
+| `helm-charts` | `` | Chart directories to render with `helm template` (one per line). Fails the step when `helm` is not on `PATH`. |
 | `kubeconform-version` | `0.8.0` | kubeconform release to install. Always installed and put first on `PATH`, even if another `kubeconform` is already present. |
+| `kustomize-version` | `` | kustomize release to install, e.g. `5.8.3`. Empty: nothing is installed and the `kustomize` already on `PATH` (if any) is used. |
+| `helm-version` | `` | Helm release to install, e.g. `3.22.1`. Empty: nothing is installed and the `helm` already on `PATH` (if any) is used. |
 | `extra-args` | `` | Extra raw arguments forwarded to kubeconform. |
 
 ## Outputs
@@ -60,14 +74,16 @@ See [`examples/workflow.yml`](examples/workflow.yml) for a complete pull-request
 ## How it works
 
 1. `scripts/install.sh` fetches the requested `kubeconform` release (and `yq` when missing),
-   verifies each download against the sha256 checksum file published with the upstream release,
-   and puts them first on `PATH`.
+   plus `kustomize` and `helm` when `kustomize-version` / `helm-version` are set. Each download
+   is verified against the sha256 checksum file published with the upstream release, and the
+   binaries are put first on `PATH`.
 2. `scripts/kubeconform-ci.sh` collects `*.yaml`/`*.yml` under `dirs`, honoring `ignore-paths`.
 3. Any directory with a `kustomization.yaml` is rendered with `kustomize build`; charts listed in
    `helm-charts` are rendered with `helm template`. Rendered output is validated instead of the
-   raw partials, so overlays are checked as they actually deploy. The action does not install
-   `kustomize` or `helm`: they must already be on the runner's `PATH`, otherwise that rendering
-   step is skipped.
+   raw partials, so overlays are checked as they actually deploy. If rendering was requested
+   (`kustomize: true` or a non-empty `helm-charts`) and the tool is not on `PATH`, the step fails
+   before validating anything. With `kustomize: auto` a missing `kustomize` only produces a
+   warning annotation.
 4. `kubeconform -output json` results from every source are merged, converted to GitHub
    `::error` annotations (`file:line` located by resource name), and summarized. Any invalid or
    errored resource fails the step.
@@ -88,7 +104,7 @@ with:
 ```bash
 bats tests/                 # unit tests for the shell library (needs bats + jq)
 shellcheck scripts/*.sh
-bash tests/integration.sh   # end-to-end against examples/ (needs kubeconform, kustomize)
+bash tests/integration.sh   # end-to-end against examples/ (needs kubeconform, kustomize, helm)
 ```
 
 ## License

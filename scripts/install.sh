@@ -7,8 +7,9 @@
 #   kubeconform already on the runner. The download is skipped only when that
 #   directory already holds the requested version.
 # - yq: fetched only when it is not already on PATH.
-# - helm and kustomize are NOT installed. Helm charts and Kustomize overlays are
-#   rendered only when those tools are already on the runner's PATH.
+# - kustomize / helm: installed into the same directory only when
+#   KUSTOMIZE_VERSION / HELM_VERSION is set. Empty means "do not install" and
+#   whatever is already on the runner's PATH (if anything) is used.
 #
 # Every download is verified against the sha256 checksum file published with
 # the upstream release; a mismatch aborts the step.
@@ -17,6 +18,10 @@ set -euo pipefail
 ver="${KUBECONFORM_VERSION:-0.8.0}"
 ver="${ver#v}"
 yq_ver="4.54.1"
+kustomize_ver="${KUSTOMIZE_VERSION:-}"
+kustomize_ver="${kustomize_ver#v}"
+helm_ver="${HELM_VERSION:-}"
+helm_ver="${helm_ver#v}"
 
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch="$(uname -m)"
@@ -70,6 +75,46 @@ if [ "${have#v}" != "$ver" ]; then
   install -m0755 "${tmp}/kubeconform" "${bindir}/kubeconform"
 fi
 
+# kustomize (opt-in) ------------------------------------------------------
+if [ -n "$kustomize_ver" ]; then
+  have=""
+  if [ -x "${bindir}/kustomize" ]; then
+    have="$("${bindir}/kustomize" version 2>/dev/null || true)"
+  fi
+  if [ "${have#v}" != "$kustomize_ver" ]; then
+    base="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${kustomize_ver}"
+    asset="kustomize_v${kustomize_ver}_${os}_${arch}.tar.gz"
+    echo "kubeconform-ci: installing kustomize v${kustomize_ver} (${os}/${arch})"
+    curl -fsSL "${base}/${asset}" -o "${tmp}/${asset}"
+    curl -fsSL "${base}/checksums.txt" -o "${tmp}/kustomize.sums"
+    # checksums.txt lines: "<sha256>  <asset>"
+    want="$(awk -v f="$asset" '$2 == f {print $1}' "${tmp}/kustomize.sums")"
+    verify_sha256 "${tmp}/${asset}" "$want" "$asset"
+    tar -xzf "${tmp}/${asset}" -C "$tmp" kustomize
+    install -m0755 "${tmp}/kustomize" "${bindir}/kustomize"
+  fi
+fi
+
+# helm (opt-in) -----------------------------------------------------------
+if [ -n "$helm_ver" ]; then
+  have=""
+  if [ -x "${bindir}/helm" ]; then
+    have="$("${bindir}/helm" version --template '{{.Version}}' 2>/dev/null || true)"
+  fi
+  if [ "${have#v}" != "$helm_ver" ]; then
+    base="https://get.helm.sh"
+    asset="helm-v${helm_ver}-${os}-${arch}.tar.gz"
+    echo "kubeconform-ci: installing helm v${helm_ver} (${os}/${arch})"
+    curl -fsSL "${base}/${asset}" -o "${tmp}/${asset}"
+    curl -fsSL "${base}/${asset}.sha256sum" -o "${tmp}/helm.sums"
+    # <asset>.sha256sum: "<sha256>  <asset>"
+    want="$(awk -v f="$asset" '$2 == f {print $1}' "${tmp}/helm.sums")"
+    verify_sha256 "${tmp}/${asset}" "$want" "$asset"
+    tar -xzf "${tmp}/${asset}" -C "$tmp" "${os}-${arch}/helm"
+    install -m0755 "${tmp}/${os}-${arch}/helm" "${bindir}/helm"
+  fi
+fi
+
 # yq (optional) -----------------------------------------------------------
 if ! command -v yq >/dev/null 2>&1 && [ ! -x "${bindir}/yq" ]; then
   base="https://github.com/mikefarah/yq/releases/download/v${yq_ver}"
@@ -93,3 +138,5 @@ else
 fi
 
 "${bindir}/kubeconform" -v || true
+if [ -n "$kustomize_ver" ]; then "${bindir}/kustomize" version || true; fi
+if [ -n "$helm_ver" ]; then "${bindir}/helm" version --short || true; fi

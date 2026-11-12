@@ -62,6 +62,9 @@ run_stream() {  # $1=label; stdin=rendered YAML; prints JSON with filename=label
 }
 
 main() {
+  # Requested rendering with a missing tool must fail, not validate raw partials.
+  kc_check_renderers "${INPUT_KUSTOMIZE:-auto}" "${INPUT_HELM_CHARTS:-}" "${INPUT_DIRS:-.}" || return 1
+
   mapfile -t KARGS < <(kc_kubeconform_args)
 
   local -a kdirs=()
@@ -98,7 +101,6 @@ main() {
   local chart
   while IFS= read -r chart || [ -n "$chart" ]; do
     [ -z "$chart" ] && continue
-    command -v helm >/dev/null 2>&1 || { echo "kubeconform-ci: helm not installed, skipping ${chart}"; continue; }
     echo "kubeconform-ci: rendering helm chart ${chart}"
     if helm template "$(basename "$chart")" "$chart" 2>/dev/null | run_stream "${chart}/Chart.yaml" >> "$docs"; then
       n_targets=$((n_targets + 1))

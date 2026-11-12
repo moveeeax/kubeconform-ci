@@ -40,6 +40,7 @@ jobs:
     env:
       KUBECONFORM_VERSION: "0.8.0"
       KUSTOMIZE_VERSION: "5.8.3"
+      HELM_VERSION: "3.22.1"
     steps:
       - uses: actions/checkout@v7.0.1
       - name: Install jq + tools
@@ -47,7 +48,7 @@ jobs:
           set -eux
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends jq curl ca-certificates tar
-      - name: Install kubeconform + kustomize
+      - name: Install kubeconform + kustomize + helm
         run: |
           set -eux
           arch="$(uname -m)"; case "$arch" in x86_64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
@@ -55,7 +56,9 @@ jobs:
             | sudo tar -xz -C /usr/local/bin kubeconform
           curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_${arch}.tar.gz" \
             | sudo tar -xz -C /usr/local/bin kustomize
-          kubeconform -v && kustomize version
+          curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${arch}.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin --strip-components=1 "linux-${arch}/helm"
+          kubeconform -v && kustomize version && helm version --short
       - name: Run integration suite
         run: bash tests/integration.sh
 
@@ -80,6 +83,36 @@ jobs:
             examples/manifests
             examples/kustomize
           kubernetes-version: '1.30'
+
+  action-render-install:
+    # kustomize-version / helm-version must install those tools and put them
+    # first on PATH, and the requested rendering must then run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install curl + jq for the composite action
+        run: |
+          set -eux
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq curl ca-certificates tar
+      - name: Render the kustomize overlay and helm chart via this action
+        uses: ./
+        with:
+          dirs: |
+            examples/manifests
+            examples/kustomize
+          kubernetes-version: '1.30'
+          kustomize: 'true'
+          kustomize-version: '5.8.3'
+          helm-charts: examples/helm/web
+          helm-version: '3.22.1'
+      - name: Check the requested versions are the ones on PATH
+        run: |
+          set -eux
+          test "$(command -v kustomize)" = "${HOME}/.kubeconform-ci/bin/kustomize"
+          test "$(kustomize version)" = "v5.8.3"
+          test "$(command -v helm)" = "${HOME}/.kubeconform-ci/bin/helm"
+          test "$(helm version --template '{{.Version}}')" = "v3.22.1"
 
   action-version-pin:
     # kubeconform-version must win over a kubeconform that is already on PATH.
